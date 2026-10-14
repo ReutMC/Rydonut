@@ -1,0 +1,96 @@
+# Rydonut CI — builds the mod on every push/PR and publishes a GitHub Release for v* tags.
+#
+# Release tokens: the release job uses a repository secret named RELEASE_TOKEN (a
+# Personal Access Token with `contents: write`) if it is configured, and otherwise
+# falls back to the built-in, automatically-provisioned GITHUB_TOKEN.
+# NEVER hardcode a token in this file — tokens belong in repository secrets only.
+
+name: Build
+
+on: [push, pull_request, workflow_dispatch]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build mod jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rydonut-${{ github.sha }}
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-dev.jar
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release (v* tags)
+    # Only run when the ref is a tag starting with "v" (e.g. v0.1.0)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+
+      - name: Create GitHub Release
+        env:
+          # Optional: set the RELEASE_TOKEN repository secret (PAT with contents: write)
+          # to use a custom token for this step. If RELEASE_TOKEN is empty/unset the
+          # built-in GITHUB_TOKEN is used instead (shell fallback below).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            export GH_TOKEN="$GITHUB_TOKEN"
+          fi
+          # Attach only the distributable jar (exclude -sources and -dev jars)
+          JARS=$(ls build/libs/*.jar | grep -Ev -- '-(sources|dev)\.jar$')
+          gh release create "${{ github.ref_name }}" $JARS \
+            --title "Rydonut ${{ github.ref_name }}" \
+            --generate-notes \
+            --clobber

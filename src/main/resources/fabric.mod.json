@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "rydonut",
+	"version": "${version}",
+	"name": "Rydonut",
+	"description": "Client-side visual awareness utility for DonutSMP: ESP suite, base finding & detection, HUD and a modern ClickGUI.",
+	"authors": [
+		"ReutMC"
+	],
+	"contact": {},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"dev.rydonut.Rydonut"
+		]
+	},
+	"mixins": [
+		"rydonut.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
